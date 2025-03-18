@@ -17,7 +17,7 @@ class JobSearcher:
         
         try:
             response = openai.chat.completions.create(
-                model="gpt-4o-mini",  # Primary model
+                model="gpt-4o-mini-search-preview",  # Primary model
                 messages=[
                     {"role": "system", "content": "You are a job search assistant. Search for relevant jobs based on the candidate's profile and return exactly 3 most relevant positions from the last 24 hours."},
                     {"role": "user", "content": query}
