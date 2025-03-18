@@ -21,8 +21,7 @@ class JobSearcher:
                 messages=[
                     {"role": "system", "content": "You are a job search assistant. Search for relevant jobs based on the candidate's profile and return exactly 3 most relevant positions from the last 24 hours."},
                     {"role": "user", "content": query}
-                ],
-                temperature=0.7
+                ]
             )
             
             jobs = self._parse_job_listings(response.choices[0].message.content)
