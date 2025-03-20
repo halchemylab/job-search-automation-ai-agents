@@ -6,6 +6,10 @@ import asyncio
 import nest_asyncio
 from typing import Optional, Dict, Any
 from IPython.display import display, HTML
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Apply nested asyncio to allow nested event loops
 nest_asyncio.apply()
@@ -166,8 +170,12 @@ def main():
     parser.add_argument("--resume-file", type=str, default="resume.pdf", 
                        help="Path to the resume file (default: resume.pdf)")
     parser.add_argument("--query", type=str, required=True, help="Query to ask about the resume")
-    parser.add_argument("--openai-api-key", type=str, required=True, help="OpenAI API key")
-    parser.add_argument("--llama-cloud-api-key", type=str, required=True, help="LlamaCloud API key")
+    parser.add_argument("--openai-api-key", type=str, 
+                       default=os.getenv('OPENAI_API_KEY'),
+                       help="OpenAI API key (can be set via OPENAI_API_KEY env variable)")
+    parser.add_argument("--llama-cloud-api-key", type=str,
+                       default=os.getenv('LLAMA_CLOUD_API_KEY'),
+                       help="LlamaCloud API key (can be set via LLAMA_CLOUD_API_KEY env variable)")
     parser.add_argument("--storage-dir", type=str, default="./storage", help="Directory to store the index")
     parser.add_argument("--force-reindex", action="store_true", help="Force reindexing even if index exists")
     parser.add_argument("--method", choices=["workflow", "agent", "query"], default="workflow", 
@@ -175,6 +183,12 @@ def main():
     
     args = parser.parse_args()
     
+    # Validate required API keys
+    if not args.openai_api_key:
+        raise ValueError("OpenAI API key must be provided via --openai-api-key or OPENAI_API_KEY environment variable")
+    if not args.llama_cloud_api_key:
+        raise ValueError("LlamaCloud API key must be provided via --llama-cloud-api-key or LLAMA_CLOUD_API_KEY environment variable")
+
     if args.method == "workflow":
         print("Running workflow...")
         result = asyncio.run(run_workflow(
