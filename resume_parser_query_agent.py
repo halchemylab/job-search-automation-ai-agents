@@ -163,7 +163,8 @@ async def run_workflow(resume_file: str, query: str, openai_api_key: str, llama_
 
 def main():
     parser = argparse.ArgumentParser(description="Run a RAG workflow on a resume file.")
-    parser.add_argument("--resume-file", type=str, required=True, help="Path to the resume file")
+    parser.add_argument("--resume-file", type=str, default="resume.pdf", 
+                       help="Path to the resume file (default: resume.pdf)")
     parser.add_argument("--query", type=str, required=True, help="Query to ask about the resume")
     parser.add_argument("--openai-api-key", type=str, required=True, help="OpenAI API key")
     parser.add_argument("--llama-cloud-api-key", type=str, required=True, help="LlamaCloud API key")
