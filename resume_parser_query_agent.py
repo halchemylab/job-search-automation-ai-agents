@@ -42,10 +42,12 @@ class QueryEvent(Event):
     query: str
 
 class RAGWorkflow(Workflow):
-    storage_dir: str
-    llm: OpenAI
-    query_engine: Any
-    force_reindex: bool = False
+    def __init__(self, timeout: int = 120, verbose: bool = True, storage_dir: str = "./storage", force_reindex: bool = False):
+        super().__init__(timeout=timeout, verbose=verbose)
+        self.storage_dir = storage_dir
+        self.force_reindex = force_reindex
+        self.llm = None
+        self.query_engine = None
 
     @step
     async def set_up(self, ctx: Context, ev: StartEvent) -> QueryEvent:
@@ -165,11 +167,20 @@ async def run_workflow(resume_file: str, query: str, openai_api_key: str, llama_
     )
     return result
 
+def get_interactive_query() -> str:
+    """Prompt the user for a query interactively."""
+    print("\nEnter your question about the resume (or 'quit' to exit):")
+    query = input("> ").strip()
+    if query.lower() in ['quit', 'exit']:
+        raise SystemExit(0)
+    return query
+
 def main():
     parser = argparse.ArgumentParser(description="Run a RAG workflow on a resume file.")
     parser.add_argument("--resume-file", type=str, default="resume.pdf", 
                        help="Path to the resume file (default: resume.pdf)")
-    parser.add_argument("--query", type=str, required=True, help="Query to ask about the resume")
+    parser.add_argument("--query", type=str, required=False,
+                       help="Query to ask about the resume (if not provided, will prompt interactively)")
     parser.add_argument("--openai-api-key", type=str, 
                        default=os.getenv('OPENAI_API_KEY'),
                        help="OpenAI API key (can be set via OPENAI_API_KEY env variable)")
@@ -182,6 +193,10 @@ def main():
                         help="Method to use: workflow, agent, or direct query")
     
     args = parser.parse_args()
+    
+    # Get query interactively if not provided
+    if not args.query:
+        args.query = get_interactive_query()
     
     # Validate required API keys
     if not args.openai_api_key:
