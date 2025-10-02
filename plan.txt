@@ -1,0 +1,46 @@
+# Project Plan: Autonomous AI Job Search Agent
+
+## 1. Project Goal
+To create a personal AI agent that automates the daily job search process. The agent will identify the top 3 most relevant, high-quality job opportunities posted within the last 24 hours, based on a user's resume and specific criteria, and present them in a consolidated report.
+
+## 2. Core Workflow
+The agent will be executed via a single script, `job_search_agent.py`, which orchestrates the following steps:
+
+1.  **Initialization**: The agent starts and prompts the user for two mandatory inputs: **target job title/role** and **location**.
+2.  **Profile Creation**: The agent reads the user's `resume.pdf`, extracts the raw text using `PyMuPDF`, and uses an OpenAI model to parse it into a structured "Candidate Profile" (containing skills, experience, etc.).
+3.  **Job Sourcing**: Using the Candidate Profile and user inputs, the agent searches for relevant job postings from the last 24 hours.
+4.  **Memory Check**: The agent loads the `seen_jobs.csv` file and filters out any jobs that have been previously reported to the user.
+5.  **Intelligent Filtering & Ranking**: The agent analyzes the remaining jobs. It will prioritize and rank them based on:
+    *   Relevance to the Candidate Profile.
+    *   **Crucially, evidence of good work-life balance**, which will be a primary focus of the company research step.
+6.  **Deep Analysis (Top 3)**: For the top 3 ranked jobs, the agent will:
+    *   **a. Perform Company Research**: Use an AI call to investigate the company, with a strong emphasis on finding information about **work culture, work-life balance, and employee benefits**.
+    *   **b. Extract Key Data**: Scrape the job posting for **salary range** and application **URL**.
+7.  **Reporting**: The agent generates a `Job_Report.md` file containing a detailed summary of the top 3 jobs, including the company research and application links.
+8.  **Data Persistence**: The agent updates two CSV files:
+    *   `seen_jobs.csv`: Appends the URLs of the reported jobs to its memory.
+    *   `job_details.csv`: Appends the extracted details (Title, Company, Salary, URL, Work-Life-Balance-Notes) for future analysis and comparison.
+
+## 3. Key Agent Features
+
+*   **Stateful Memory**: The agent remembers which jobs it has shown you via `seen_jobs.csv`, ensuring you only get fresh leads.
+*   **Value-Driven Filtering**: The agent's primary "opinion" is to filter for jobs that respect work-life balance, making its recommendations more personalized and valuable than a simple keyword search.
+*   **Data Logging for Analysis**: By saving structured data to `job_details.csv`, it enables the user to perform long-term analysis on salary trends and benefits across their search.
+
+## 4. Inputs & Outputs
+
+*   **Inputs**:
+    *   `resume.pdf` (must be present in the root directory).
+    *   `Job Title` (asked on launch).
+    *   `Location` (asked on launch).
+*   **Outputs**:
+    *   `Job_Report.md`: The main, human-readable report with the day's findings.
+    *   `seen_jobs.csv`: A log of all job URLs ever reported.
+    *   `job_details.csv`: A structured database of key details from promising jobs.
+
+## 5. Technical Approach
+
+*   The main script will be `job_search_agent.py`.
+*   It will import and orchestrate classes/functions from the existing `job_search_script.py` and `company_research_script.py`.
+*   `llama-index` and `llama-parse` will be fully removed. Resume parsing will be handled by `PyMuPDF` for text extraction and the OpenAI API for structuring.
+*   New dependencies will include `PyMuPDF` and `pandas` (for CSV manipulation).
