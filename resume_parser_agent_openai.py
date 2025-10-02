@@ -6,6 +6,9 @@ import numpy as np
 from openai import OpenAI
 import pypdf
 import pickle
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # --- Helper Functions ---
 
