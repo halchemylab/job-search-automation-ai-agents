@@ -1,92 +1,53 @@
 import os
 from datetime import datetime, timedelta
 from typing import List, Dict
-import openai
+import requests
 from dotenv import load_dotenv
 
 class JobSearcher:
     def __init__(self):
         load_dotenv()
-        openai.api_key = os.getenv("OPENAI_API_KEY")
 
     def search_jobs(self, resume_data: Dict, filters: Dict) -> List[Dict]:
         """
-        Search for jobs based on resume data and user filters.
+        Search for jobs using the Arbeitnow API.
         """
-        query = self._construct_search_query(resume_data, filters)
+        skills = ', '.join(resume_data.get('skills', [])[:5])
+        location = filters.get('location', 'Any')
         
+        # The API doesn't have a specific location filter, so we include it in the search query
+        search_query = f"{skills} {location}"
+
         try:
-            response = openai.chat.completions.create(
-                model="gpt-4o-mini-search-preview",  # Primary model
-                messages=[
-                    {"role": "system", "content": "You are a job search assistant. Search for relevant jobs based on the candidate's profile and return exactly 3 most relevant positions from the last 24 hours."},
-                    {"role": "user", "content": query}
-                ]
+            response = requests.get(
+                "https://www.arbeitnow.com/api/job-board-api",
+                params={"search": search_query, "page": 1}
             )
+            response.raise_for_status()  # Raise an exception for bad status codes
             
-            jobs = self._parse_job_listings(response.choices[0].message.content)
-            return self._score_and_rank_jobs(jobs, resume_data)
-        except Exception as e:
+            jobs = response.json().get('data', [])
+            
+            # Filter jobs posted in the last 24 hours
+            recent_jobs = self._filter_recent_jobs(jobs)
+            
+            return self._score_and_rank_jobs(recent_jobs, resume_data)
+        except requests.exceptions.RequestException as e:
             print(f"Error in job search: {str(e)}")
-            if "api_key" in str(e).lower():
-                print("OpenAI API key error. Please check your .env file for a valid OPENAI_API_KEY.")
             return []
 
-    def _construct_search_query(self, resume_data: Dict, filters: Dict) -> str:
-        """Construct a search query based on resume data and filters"""
-        skills = ', '.join(resume_data.get('skills', [])[:5])  # Top 5 skills
-        experience = resume_data.get('experience', [])[0] if resume_data.get('experience') else ""
+    def _filter_recent_jobs(self, jobs: List[Dict]) -> List[Dict]:
+        """Filters jobs to include only those posted in the last 24 hours."""
+        recent_jobs = []
+        twenty_four_hours_ago = datetime.utcnow() - timedelta(days=1)
         
-        query = f"""
-        Find jobs matching this candidate profile:
-        Skills: {skills}
-        Recent Experience: {experience}
-        Location: {filters.get('location', 'Any')}
-        Remote: {'Yes' if filters.get('remote') else 'No preference'}
-        Minimum Salary: ${filters.get('min_salary', 0):,}
-        
-        Please format each job as:
-        Title: [job title]
-        Company: [company name]
-        Location: [location]
-        Salary: [salary range if available]
-        Description: [brief job description]
-        URL: [job posting URL]
-        """
-        return query
-
-    def _parse_job_listings(self, response_text: str) -> List[Dict]:
-        """Parse the OpenAI response into structured job listings"""
-        jobs = []
-        current_job = {}
-        
-        # Split into individual job listings (splitting by numbered items)
-        listings = response_text.split('\n\n')
-        
-        for listing in listings:
-            if not listing.strip() or 'Title:' not in listing:
-                continue
-                
-            current_job = {}
-            lines = listing.split('\n')
-            
-            for line in lines:
-                line = line.strip().replace('**', '')  # Remove markdown
-                if ':' in line:
-                    key, value = [part.strip() for part in line.split(':', 1)]
-                    key = key.lower()
-                    
-                    # Handle URL markdown format
-                    if key == 'url':
-                        if '[' in value and '](' in value and ')' in value:
-                            value = value[value.index('(')+1:value.index(')')]
-                    
-                    current_job[key] = value
-
-            if current_job:
-                jobs.append(current_job)
-        
-        return jobs
+        for job in jobs:
+            created_at_str = job.get('created_at')
+            if created_at_str:
+                # The API returns a Unix timestamp in milliseconds
+                created_at = datetime.utcfromtimestamp(int(created_at_str) / 1000)
+                if created_at >= twenty_four_hours_ago:
+                    recent_jobs.append(job)
+        return recent_jobs
 
     def _score_and_rank_jobs(self, jobs: List[Dict], resume_data: Dict) -> List[Dict]:
         """Score and rank jobs based on match with resume"""
@@ -97,10 +58,6 @@ class JobSearcher:
             for skill in resume_data.get('skills', []):
                 if skill.lower() in job_desc:
                     score += 1
-            # Increase score for experience keywords
-            for exp in resume_data.get('experience', []):
-                if any(keyword in job_desc for keyword in exp.lower().split()):
-                    score += 0.5
             job['match_score'] = score
             
         return sorted(jobs, key=lambda x: x.get('match_score', 0), reverse=True)
@@ -157,7 +114,7 @@ def main():
     
     for job in results:
         print(f"\n🎯 {job.get('title', 'N/A')}")
-        print(f"🏢 {job.get('company', 'N/A')}")
+        print(f"🏢 {job.get('company_name', 'N/A')}")
         print(f"📍 {job.get('location', 'N/A')}")
         print(f"💰 {job.get('salary', 'Not specified')}")
         print(f"🔗 {job.get('url', 'No URL provided')}")

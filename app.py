@@ -71,19 +71,19 @@ if st.session_state.get('jobs'):
         st.warning("No jobs found matching your criteria.")
     else:
         for i, job in enumerate(st.session_state.jobs):
-            with st.expander(f"**{job.get('title', 'N/A')}** at **{job.get('company', 'N/A')}**"):
+            with st.expander(f"**{job.get('title', 'N/A')}** at **{job.get('company_name', 'N/A')}**"):
                 st.write(f"**Location:** {job.get('location', 'N/A')}")
                 st.write(f"**Salary:** {job.get('salary', 'Not specified')}")
                 st.write(f"**Description:** {job.get('description', 'N/A')}")
                 st.markdown(f"[View Job Posting]({job.get('url', '#')})", unsafe_allow_html=True)
                 
-                if st.button(f"Research {job.get('company', 'N/A')}", key=f"research_{i}"):
-                    with st.spinner(f"Researching {job.get('company', 'N/A')}..."):
+                if st.button(f"Research {job.get('company_name', 'N/A')}", key=f"research_{i}"):
+                    with st.spinner(f"Researching {job.get('company_name', 'N/A')}..."):
                         researcher = CompanyResearcher()
                         # Run the async function
-                        company_info = asyncio.run(researcher.research_company(job.get('company', 'N/A')))
+                        company_info = asyncio.run(researcher.research_company(job.get('company_name', 'N/A')))
                         
-                        st.subheader(f"Company Insights: {job.get('company', 'N/A')}")
+                        st.subheader(f"Company Insights: {job.get('company_name', 'N/A')}")
                         st.write("**Company Overview:**", company_info.get('overview', 'Not available'))
                         st.write("**Recent Developments:**", company_info.get('recent_developments', 'Not available'))
                         st.write("**Culture and Benefits:**", company_info.get('culture_and_benefits', 'Not available'))
