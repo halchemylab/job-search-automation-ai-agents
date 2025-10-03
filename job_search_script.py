@@ -1,5 +1,4 @@
 import os
-from datetime import datetime, timedelta
 from typing import List, Dict
 import requests
 from dotenv import load_dotenv
@@ -7,74 +6,65 @@ from dotenv import load_dotenv
 class JobSearcher:
     def __init__(self):
         load_dotenv()
+        self.api_key = os.getenv("JSEARCH_API_KEY")
+        self.api_url = "https://jsearch.p.rapidapi.com/search"
 
     def search_jobs(self, resume_data: Dict, filters: Dict) -> List[Dict]:
         """
-        Search for jobs using the Arbeitnow API.
+        Search for jobs using the Jsearch API.
         """
-        skills = ', '.join(resume_data.get('skills', [])[:5])
-        location = filters.get('location', 'Any')
-        job_types = ",".join(filters.get('job_types', []))
+        skills = ' '.join(resume_data.get('skills', [])[:5]) # Use top 5 skills for query
+        query = f"{skills} in {filters.get('location', 'USA')}"
+        print(f"Searching for: {query}") # for debugging
+
+        headers = {
+            "X-RapidAPI-Key": self.api_key,
+            "X-RapidAPI-Host": "jsearch.p.rapidapi.com"
+        }
         
-        # The API doesn't have a specific location filter, so we include it in the search query
-        search_query = f"{skills} {location}"
+        params = {
+            "query": query,
+            "page": "1",
+            "num_pages": "1",
+            "country": "us",
+            "language": "en",
+            "date_posted": filters.get("date_posted", "all"),
+            "employment_types": ",".join(filters.get("job_types", [])),
+            "work_from_home": str(filters.get("work_style") == "Remote").lower(),
+            "job_requirements": "no_experience",
+            "radius": "1",
+            "exclude_job_publishers": "BeeBe,Dice",
+            "fields": "employer_name,job_publisher,job_title,job_country"
+        }
 
         try:
-            params = {"search": search_query, "page": 1}
-            if job_types:
-                params["type"] = job_types
-
-            response = requests.get(
-                "https://www.arbeitnow.com/api/job-board-api",
-                params=params
-            )
-            response.raise_for_status()  # Raise an exception for bad status codes
+            response = requests.get(self.api_url, headers=headers, params=params)
+            response.raise_for_status()
             
             jobs = response.json().get('data', [])
             
-            # Filter by work style
-            jobs = self._filter_by_work_style(jobs, filters.get('work_style'))
+            # The API returns a rich set of data, here we normalize it
+            normalized_jobs = [self._normalize_job_data(job) for job in jobs]
+
+            ranked_jobs = self._score_and_rank_jobs(normalized_jobs, resume_data)
+            return ranked_jobs[:3] # Return top 3 jobs
             
-            # Filter jobs posted in the last 24 hours
-            recent_jobs = self._filter_recent_jobs(jobs)
-            
-            ranked_jobs = self._score_and_rank_jobs(recent_jobs, resume_data)
-            return ranked_jobs[:10]
         except requests.exceptions.RequestException as e:
             print(f"Error in job search: {str(e)}")
             return []
 
-    def _filter_recent_jobs(self, jobs: List[Dict]) -> List[Dict]:
-        """Filters jobs to include only those posted in the last 24 hours."""
-        recent_jobs = []
-        twenty_four_hours_ago = datetime.utcnow() - timedelta(days=1)
-        
-        for job in jobs:
-            created_at_str = job.get('created_at')
-            if created_at_str:
-                # The API returns a Unix timestamp in seconds
-                created_at = datetime.utcfromtimestamp(int(created_at_str))
-                if created_at >= twenty_four_hours_ago:
-                    recent_jobs.append(job)
-        return recent_jobs
-
-    def _filter_by_work_style(self, jobs: List[Dict], work_style: str) -> List[Dict]:
-        """Filters jobs by work style (On-site, Remote, Hybrid)."""
-        if not work_style or work_style == "Any":
-            return jobs
-
-        filtered_jobs = []
-        for job in jobs:
-            description = job.get('description', '').lower()
-            is_remote = job.get('remote', False)
-
-            if work_style == "Remote" and is_remote:
-                filtered_jobs.append(job)
-            elif work_style == "On-site" and not is_remote:
-                filtered_jobs.append(job)
-            elif work_style == "Hybrid" and 'hybrid' in description:
-                filtered_jobs.append(job)
-        return filtered_jobs
+    def _normalize_job_data(self, job: Dict) -> Dict:
+        """
+        Normalize the job data from Jsearch API to a consistent format.
+        """
+        return {
+            'title': job.get('job_title'),
+            'company_name': job.get('employer_name'),
+            'location': job.get('job_city', 'N/A') + ", " + job.get('job_state', 'N/A'),
+            'description': job.get('job_description'),
+            'url': job.get('job_apply_link'),
+            'salary': f"{job.get('job_min_salary')} - {job.get('job_max_salary')}" if job.get('job_min_salary') else "Not specified"
+        }
 
     def _score_and_rank_jobs(self, jobs: List[Dict], resume_data: Dict) -> List[Dict]:
         """Score and rank jobs based on match with resume"""
@@ -89,44 +79,19 @@ class JobSearcher:
             
         return sorted(jobs, key=lambda x: x.get('match_score', 0), reverse=True)
 
-def get_resume_data_from_input() -> Dict:
-    """Collect resume data from terminal input."""
-    skills_input = input("Enter your skills (comma-separated): ").strip()
-    skills = [skill.strip() for skill in skills_input.split(',') if skill.strip()]
-
-    experience_input = input("Enter your most recent experience: ").strip()
-    experience = [experience_input] if experience_input else []
-    
-    return {
-        'skills': skills,
-        'experience': experience
-    }
-
-def get_filters_from_input() -> Dict:
-    """Collect job search filters from terminal input."""
-    location = input("Enter preferred location (or leave blank for 'Any'): ").strip() or "Any"
-    
-    remote_input = input("Are you open to remote positions? (yes/no): ").strip().lower()
-    remote = True if remote_input in ['yes', 'y'] else False
-    
-    min_salary_input = input("Enter minimum salary (numbers only, or leave blank for 0): ").strip()
-    min_salary = int(min_salary_input) if min_salary_input.isdigit() else 0
-    
-    return {
-        "location": location,
-        "remote": remote,
-        "min_salary": min_salary
-    }
-
 def main():
-    load_dotenv()
-    if not os.getenv("OPENAI_API_KEY"):
-        print("Error: OPENAI_API_KEY not found in environment variables. Please set it in your .env file.")
-        return
-
-    print("\n--- Job Search Assistant ---\n")
-    resume_data = get_resume_data_from_input()
-    filters = get_filters_from_input()
+    # This is a sample execution for testing purposes.
+    # In the actual application, resume_data and filters will be passed from the Streamlit app.
+    resume_data = {
+        'skills': ['Python', 'Data Analysis', 'Machine Learning'],
+        'experience': ['2 years of experience in data science']
+    }
+    filters = {
+        "location": "New York, NY",
+        "job_types": ["full-time"],
+        "work_style": "Any",
+        "date_posted": "today"
+    }
 
     searcher = JobSearcher()
 

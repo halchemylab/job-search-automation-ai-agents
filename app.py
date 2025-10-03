@@ -33,6 +33,9 @@ if uploaded_file is not None:
             skills = answer_query(skills_query, resume_path)
             experience = answer_query(experience_query, resume_path)
             
+            # Clean up the skills string
+            skills = skills.replace("Technical Skills:", "").replace("Soft Skills:", "").replace("Programming Languages:", "").strip()
+
             st.session_state.resume_data = {
                 'skills': [skill.strip() for skill in skills.split(',')],
                 'experience': [experience]
@@ -77,16 +80,16 @@ if st.session_state.get('jobs'):
                 st.write(f"**Description:** {job.get('description', 'N/A')}")
                 st.markdown(f"[View Job Posting]({job.get('url', '#')})", unsafe_allow_html=True)
                 
-                if st.button(f"Research {job.get('company_name', 'N/A')}", key=f"research_{i}"):
-                    with st.spinner(f"Researching {job.get('company_name', 'N/A')}..."):
-                        researcher = CompanyResearcher()
-                        # Run the async function
-                        company_info = asyncio.run(researcher.research_company(job.get('company_name', 'N/A')))
-                        
-                        st.subheader(f"Company Insights: {job.get('company_name', 'N/A')}")
-                        st.write("**Company Overview:**", company_info.get('overview', 'Not available'))
-                        st.write("**Recent Developments:**", company_info.get('recent_developments', 'Not available'))
-                        st.write("**Culture and Benefits:**", company_info.get('culture_and_benefits', 'Not available'))
+                # if st.button(f"Research {job.get('company_name', 'N/A')}", key=f"research_{i}"):
+                #     with st.spinner(f"Researching {job.get('company_name', 'N/A')}..."):
+                #         researcher = CompanyResearcher()
+                #         # Run the async function
+                #         company_info = asyncio.run(researcher.research_company(job.get('company_name', 'N/A')))
+                #         
+                #         st.subheader(f"Company Insights: {job.get('company_name', 'N/A')}")
+                #         st.write("**Company Overview:**", company_info.get('overview', 'Not available'))
+                #         st.write("**Recent Developments:**", company_info.get('recent_developments', 'Not available'))
+                #         st.write("**Culture and Benefits:**", company_info.get('culture_and_benefits', 'Not available'))
 
 # --- Initial state setup ---
 if 'resume_analyzed' not in st.session_state:

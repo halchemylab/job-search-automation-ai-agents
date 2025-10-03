@@ -1,94 +1,62 @@
 import asyncio
 import aiohttp
-import openai
-from typing import Dict, Optional
+from typing import Dict
 import os
 from dotenv import load_dotenv
 
 class CompanyResearcher:
     def __init__(self):
         load_dotenv()
-        openai.api_key = os.getenv("OPENAI_API_KEY")
-        if os.name == 'nt':  # Windows specific event loop policy
-            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+        self.rapidapi_key = os.getenv("RAPIDAPI_KEY")
+        self.api_host = "real-time-glassdoor-data.p.rapidapi.com"
 
     async def research_company(self, company_name: str) -> Dict:
-        try:
-            timeout = aiohttp.ClientTimeout(total=30)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                tasks = [
-                    self._get_company_overview(session, company_name),
-                    self._get_recent_news(session, company_name),
-                    self._get_employee_reviews(session, company_name)
-                ]
-                results = await asyncio.gather(*tasks)
-            company_info = self._analyze_company_data(*results)
-            return company_info
+        url = f"https://{self.api_host}/company/search"
+        headers = {
+            "X-RapidAPI-Key": self.rapidapi_key,
+            "X-RapidAPI-Host": self.api_host
+        }
+        params = {"query": company_name}
 
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=headers, params=params) as response:
+                    response.raise_for_status()
+                    data = await response.json()
+                    # Assuming the first result is the most relevant
+                    if data and data.get('data') and len(data['data']) > 0:
+                        company_id = data['data'][0]['id']
+                        return await self._get_company_details(session, company_id)
+                    else:
+                        return {"error": "Company not found"}
         except Exception as e:
             print(f"Error researching company {company_name}: {str(e)}")
-            return {
-                "company_name": company_name,
-                "error": "Unable to gather company information",
-                "status": "failed"
-            }
+            return {"error": "Unable to gather company information"}
 
-    async def _get_company_overview(self, session: aiohttp.ClientSession, company_name: str) -> Dict:
-        try:
-            response = await openai.AsyncOpenAI().chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "You are a company research assistant. Provide key information about the company."},
-                    {"role": "user", "content": f"Provide a brief overview of {company_name}, including industry, size, and key business areas. Summarize into 1-3 sentences. Don't output sources"}
-                ]
-            )
-            return {"overview": response.choices[0].message.content}
-        except Exception as e:
-            print(f"Error in company overview: {str(e)}")
-            if "api_key" in str(e).lower():
-                return {"overview": "API key error - please check your OpenAI API key configuration"}
-            return {"overview": f"Company overview not available: {str(e)}"}
-
-    async def _get_recent_news(self, session: aiohttp.ClientSession, company_name: str) -> Dict:
-        try:
-            response = await openai.AsyncOpenAI().chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "You are a news research assistant. Provide recent developments about the company."},
-                    {"role": "user", "content": f"What are the most significant recent developments or news about {company_name} in the last 6 months? Summarize into 1-3 sentences. Don't output Sources."}
-                ]
-            )
-            return {"recent_news": response.choices[0].message.content}
-        except Exception as e:
-            print(f"Error in recent news: {str(e)}")
-            if "api_key" in str(e).lower():
-                return {"recent_news": "API key error - please check your OpenAI API key configuration"}
-            return {"recent_news": f"Recent news not available: {str(e)}"}
-
-    async def _get_employee_reviews(self, session: aiohttp.ClientSession, company_name: str) -> Dict:
-        try:
-            response = await openai.AsyncOpenAI().chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "You are a workplace culture analyst. Provide insights about the company's work culture."},
-                    {"role": "user", "content": f"What is known about {company_name}'s work culture, benefits, and employee satisfaction? Summarize into 1-3 sentences. Don't output sources."}
-                ]
-            )
-            return {"culture": response.choices[0].message.content}
-        except Exception as e:
-            print(f"Error in employee reviews: {str(e)}")
-            if "api_key" in str(e).lower():
-                return {"culture": "API key error - please check your OpenAI API key configuration"}
-            return {"culture": f"Culture information not available: {str(e)}"}
-
-    def _analyze_company_data(self, overview: Dict, news: Dict, culture: Dict) -> Dict:
-        return {
-            "overview": overview.get("overview", "Not available"),
-            "recent_developments": news.get("recent_news", "Not available"),
-            "culture_and_benefits": culture.get("culture", "Not available"),
-            "analysis_timestamp": asyncio.get_event_loop().time(),
-            "data_freshness": "24h"
+    async def _get_company_details(self, session: aiohttp.ClientSession, company_id: str) -> Dict:
+        url = f"https://{self.api_host}/company/reviews"
+        headers = {
+            "X-RapidAPI-Key": self.rapidapi_key,
+            "X-RapidAPI-Host": self.api_host
         }
+        params = {"id": company_id}
+
+        try:
+            async with session.get(url, headers=headers, params=params) as response:
+                response.raise_for_status()
+                data = await response.json()
+                if data and data.get('data'):
+                    return self._normalize_company_data(data['data'])
+                else:
+                    return {"error": "No details found for company"}
+        except Exception as e:
+            print(f"Error getting company details: {str(e)}")
+            return {"error": "Unable to fetch company details"}
+
+    def _normalize_company_data(self, company_data: Dict) -> Dict:
+        # For simplicity, we are just returning the raw data from the API
+        # In a real application, you would want to extract and format the most important information
+        return company_data
 
 async def main():
     researcher = CompanyResearcher()
@@ -99,12 +67,11 @@ async def main():
         
         print("Research Results:")
         print("=================")
-        print("\n🏢Company Overview:")
-        print(result.get('overview', 'Not available'))
-        print("\n📍Recent Developments:")
-        print(result.get('recent_developments', 'Not available'))
-        print("\n💰Culture and Benefits:")
-        print(result.get('culture_and_benefits', 'Not available'))
+        # The result is a dictionary containing the raw data from the API
+        # You can process and display it as needed
+        import json
+        print(json.dumps(result, indent=2))
+
     except KeyboardInterrupt:
         print("\nOperation cancelled by user")
     except Exception as e:
