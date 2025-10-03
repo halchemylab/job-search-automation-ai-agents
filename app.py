@@ -48,8 +48,8 @@ if uploaded_file is not None:
 st.header("2. Define Your Job Search")
 if st.session_state.get('resume_analyzed'):
     location = st.text_input("Location", "Remote")
-    remote = st.checkbox("Remote Only", True)
-    min_salary = st.number_input("Minimum Salary (Optional)", 0)
+    job_types = st.multiselect("Job Type", ["full-time", "part-time", "contract", "internship"])
+    work_style = st.selectbox("Work Style", ["Any", "On-site", "Remote", "Hybrid"])
 
     # --- 3. Search for Jobs ---
     if st.button("Search for Jobs"):
@@ -57,8 +57,8 @@ if st.session_state.get('resume_analyzed'):
         with st.spinner("Searching for the latest job postings..."):
             filters = {
                 "location": location,
-                "remote": remote,
-                "min_salary": min_salary
+                "job_types": job_types,
+                "work_style": work_style
             }
             
             searcher = JobSearcher()

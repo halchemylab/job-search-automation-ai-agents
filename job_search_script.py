@@ -14,18 +14,26 @@ class JobSearcher:
         """
         skills = ', '.join(resume_data.get('skills', [])[:5])
         location = filters.get('location', 'Any')
+        job_types = ",".join(filters.get('job_types', []))
         
         # The API doesn't have a specific location filter, so we include it in the search query
         search_query = f"{skills} {location}"
 
         try:
+            params = {"search": search_query, "page": 1}
+            if job_types:
+                params["type"] = job_types
+
             response = requests.get(
                 "https://www.arbeitnow.com/api/job-board-api",
-                params={"search": search_query, "page": 1}
+                params=params
             )
             response.raise_for_status()  # Raise an exception for bad status codes
             
             jobs = response.json().get('data', [])
+            
+            # Filter by work style
+            jobs = self._filter_by_work_style(jobs, filters.get('work_style'))
             
             # Filter jobs posted in the last 24 hours
             recent_jobs = self._filter_recent_jobs(jobs)
@@ -48,6 +56,24 @@ class JobSearcher:
                 if created_at >= twenty_four_hours_ago:
                     recent_jobs.append(job)
         return recent_jobs
+
+    def _filter_by_work_style(self, jobs: List[Dict], work_style: str) -> List[Dict]:
+        """Filters jobs by work style (On-site, Remote, Hybrid)."""
+        if not work_style or work_style == "Any":
+            return jobs
+
+        filtered_jobs = []
+        for job in jobs:
+            description = job.get('description', '').lower()
+            is_remote = job.get('remote', False)
+
+            if work_style == "Remote" and is_remote:
+                filtered_jobs.append(job)
+            elif work_style == "On-site" and not is_remote:
+                filtered_jobs.append(job)
+            elif work_style == "Hybrid" and 'hybrid' in description:
+                filtered_jobs.append(job)
+        return filtered_jobs
 
     def _score_and_rank_jobs(self, jobs: List[Dict], resume_data: Dict) -> List[Dict]:
         """Score and rank jobs based on match with resume"""
