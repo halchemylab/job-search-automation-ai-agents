@@ -38,7 +38,8 @@ class JobSearcher:
             # Filter jobs posted in the last 24 hours
             recent_jobs = self._filter_recent_jobs(jobs)
             
-            return self._score_and_rank_jobs(recent_jobs, resume_data)
+            ranked_jobs = self._score_and_rank_jobs(recent_jobs, resume_data)
+            return ranked_jobs[:10]
         except requests.exceptions.RequestException as e:
             print(f"Error in job search: {str(e)}")
             return []
@@ -51,8 +52,8 @@ class JobSearcher:
         for job in jobs:
             created_at_str = job.get('created_at')
             if created_at_str:
-                # The API returns a Unix timestamp in milliseconds
-                created_at = datetime.utcfromtimestamp(int(created_at_str) / 1000)
+                # The API returns a Unix timestamp in seconds
+                created_at = datetime.utcfromtimestamp(int(created_at_str))
                 if created_at >= twenty_four_hours_ago:
                     recent_jobs.append(job)
         return recent_jobs
